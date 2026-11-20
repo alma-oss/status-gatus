@@ -36,6 +36,9 @@ func EndpointStatuses(cfg *config.Config) fiber.Handler {
 			} else if endpointStatusesFromRemote != nil {
 				endpointStatuses = append(endpointStatuses, endpointStatusesFromRemote...)
 			}
+			for _, endpointStatus := range endpointStatuses {
+				endpointStatus.WithHealth()
+			}
 			// Marshal endpoint statuses to JSON
 			data, err = json.Marshal(endpointStatuses)
 			if err != nil {
@@ -104,7 +107,7 @@ func EndpointStatus(cfg *config.Config) fiber.Handler {
 			logr.Errorf("[api.EndpointStatus] Endpoint with key=%s not found", key)
 			return c.Status(404).SendString("not found")
 		}
-		output, err := json.Marshal(endpointStatus)
+		output, err := json.Marshal(endpointStatus.WithHealth())
 		if err != nil {
 			logr.Errorf("[api.EndpointStatus] Unable to marshal object to JSON: %s", err.Error())
 			return c.Status(500).SendString("unable to marshal object to JSON")

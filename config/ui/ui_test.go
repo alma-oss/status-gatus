@@ -1,8 +1,12 @@
 package ui
 
 import (
+	"bytes"
 	"errors"
+	static "github.com/TwiN/gatus/v5/web"
+	"html/template"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -53,6 +57,9 @@ func TestConfig_ValidateAndSetDefaults(t *testing.T) {
 		if cfg.LoginSubtitle != defaultLoginSubtitle {
 			t.Errorf("expected LoginSubtitle to be %s, got %s", defaultLoginSubtitle, cfg.LoginSubtitle)
 		}
+		if cfg.BasePath != defaultBasePath {
+			t.Errorf("expected BasePath to be %s, got %s", defaultBasePath, cfg.BasePath)
+		}
 	})
 	t.Run("custom-values", func(t *testing.T) {
 		cfg := &Config{
@@ -66,6 +73,7 @@ func TestConfig_ValidateAndSetDefaults(t *testing.T) {
 			DefaultSortBy:       "health",
 			DefaultFilterBy:     "failing",
 			LoginSubtitle:       "Welcome",
+			BasePath:            "/custom-base-path/",
 		}
 		if err := cfg.ValidateAndSetDefaults(); err != nil {
 			t.Error("expected no error, got", err.Error())
@@ -100,6 +108,9 @@ func TestConfig_ValidateAndSetDefaults(t *testing.T) {
 		if cfg.LoginSubtitle != "Welcome" {
 			t.Errorf("expected LoginSubtitle to be preserved, got %s", cfg.LoginSubtitle)
 		}
+		if cfg.BasePath != "/custom-base-path/" {
+			t.Errorf("expected BasePath to be /custom-base-path/, got %s", cfg.BasePath)
+		}
 	})
 	t.Run("partial-custom-values", func(t *testing.T) {
 		cfg := &Config{
@@ -128,6 +139,9 @@ func TestConfig_ValidateAndSetDefaults(t *testing.T) {
 		}
 		if cfg.LoginSubtitle != defaultLoginSubtitle {
 			t.Errorf("expected LoginSubtitle to use default, got %s", cfg.LoginSubtitle)
+		}
+		if cfg.BasePath != defaultBasePath {
+			t.Errorf("expected BasePath to be %s, got %s", defaultBasePath, cfg.BasePath)
 		}
 	})
 }
@@ -193,6 +207,9 @@ func TestGetDefaultConfig(t *testing.T) {
 	}
 	if defaultConfig.LoginSubtitle != defaultLoginSubtitle {
 		t.Error("expected GetDefaultConfig() to return defaultLoginSubtitle, got", defaultConfig.LoginSubtitle)
+	}
+	if defaultConfig.BasePath != defaultBasePath {
+		t.Error("expected GetDefaultConfig() to return defaultBasePath, got", defaultConfig.BasePath)
 	}
 }
 
@@ -297,5 +314,24 @@ func TestConfig_ValidateAndSetDefaults_DefaultFilterBy(t *testing.T) {
 				t.Errorf("expected DefaultFilterBy to be %s, got %s", scenario.ExpectedValue, cfg.DefaultFilterBy)
 			}
 		})
+	}
+}
+
+func TestConfig_ValidateAndSetDefaults_RendersButtons(t *testing.T) {
+	cfg := &Config{Buttons: []Button{{Name: "Incident history", Link: "history"}}}
+	if err := cfg.ValidateAndSetDefaults(); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	tpl, err := template.ParseFS(static.FileSystem, static.IndexPath)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	var buffer bytes.Buffer
+	if err := tpl.Execute(&buffer, ViewData{UI: cfg, Theme: "dark"}); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	expected := `window.config.buttons.push({name:"Incident history",link:"history"});`
+	if !strings.Contains(buffer.String(), expected) {
+		t.Errorf("expected the rendered page to contain %q (html/template strips JS comments; the button range must not sit in one)", expected)
 	}
 }

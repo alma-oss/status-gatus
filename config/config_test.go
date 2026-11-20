@@ -1896,6 +1896,20 @@ func TestParseAndValidateConfigBytesWithNoEndpoints(t *testing.T) {
 	}
 }
 
+func TestParseAndValidateConfigBytesWithExternalEndpointsOnly(t *testing.T) {
+	config, err := parseAndValidateConfigBytes([]byte(`
+external-endpoints:
+  - name: external
+    token: potato
+`))
+	if err != nil {
+		t.Fatal("Expected no error, got", err)
+	}
+	if len(config.ExternalEndpoints) != 1 {
+		t.Error("Expected one external endpoint")
+	}
+}
+
 func TestGetAlertingProviderByAlertType(t *testing.T) {
 	alertingConfig := &alerting.Config{
 		AWSSimpleEmailService: &awsses.AlertProvider{},
@@ -2739,4 +2753,46 @@ func TestResolveTunnelForClientConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConfig_UpdateLastFileModTime(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	configFilePath := filepath.Join(dir, "config.yaml")
+	_ = os.WriteFile(configFilePath, []byte(`endpoints:
+  - name: test
+    url: https://example.com
+`), 0o644)
+	time.Sleep(10 * time.Millisecond)
+	t.Run("single-file", func(t *testing.T) {
+		config := &Config{
+			configPath: configFilePath,
+		}
+		config.UpdateLastFileModTime()
+		stat, _ := os.Stat(configFilePath)
+		if config.lastFileModTime != stat.ModTime() {
+			t.Errorf("expected lastFileModTime to be %v, got %v", stat.ModTime(), config.lastFileModTime)
+		}
+	})
+	t.Run("directory", func(t *testing.T) {
+		configDir := &Config{
+			configPath: dir,
+		}
+		configDir.UpdateLastFileModTime()
+		stat, _ := os.Stat(configFilePath)
+		if configDir.lastFileModTime != stat.ModTime() {
+			t.Errorf("expected lastFileModTime to be %v, got %v", stat.ModTime(), configDir.lastFileModTime)
+		}
+	})
+	t.Run("missing-file", func(t *testing.T) {
+		configMissing := &Config{
+			configPath: filepath.Join(dir, "does_not_exist.yaml"),
+		}
+		before := time.Now()
+		configMissing.UpdateLastFileModTime()
+		after := time.Now()
+		if configMissing.lastFileModTime.Before(before) || configMissing.lastFileModTime.After(after) {
+			t.Errorf("expected lastFileModTime to fallback to time.Now(), got %v", configMissing.lastFileModTime)
+		}
+	})
 }

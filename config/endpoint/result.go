@@ -36,6 +36,10 @@ type Result struct {
 	// Success whether the result signifies a success or not
 	Success bool `json:"success"`
 
+	// Health is the three-state reading derived from Success and ConditionResults (see ComputeHealth).
+	// Set on API responses only, never persisted.
+	Health Health `json:"health,omitempty"`
+
 	// Timestamp when the request was sent
 	Timestamp time.Time `json:"timestamp"`
 
