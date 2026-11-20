@@ -17,6 +17,9 @@ type Status struct {
 	// Results is the list of endpoint evaluation results
 	Results []*Result `json:"results"`
 
+	// Health of the latest result (see Result.Health). Set on API responses only.
+	Health Health `json:"health,omitempty"`
+
 	// Events is a list of events
 	Events []*Event `json:"events,omitempty"`
 

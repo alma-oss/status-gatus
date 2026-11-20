@@ -1,0 +1,38 @@
+name: Pre-release
+
+# Every push to a feature branch is published as `0.0.0-<branch>.<run number>`,
+# e.g. feature/initial-implementation -> 0.0.0-initial-implementation.7
+on:
+  push:
+    branches:
+      - 'feature/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Pre-release version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Version from the branch name
+        id: version
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          slug="$(echo "${BRANCH#feature/}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g')"
+          echo "version=0.0.0-${slug}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: [version]
+    uses: ./.github/workflows/image.yaml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ needs.version.outputs.version }}

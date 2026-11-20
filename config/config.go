@@ -47,7 +47,7 @@ const (
 
 var (
 	// ErrNoEndpointOrSuiteInConfig is an error returned when a configuration file or directory has no endpoints configured
-	ErrNoEndpointOrSuiteInConfig = errors.New("configuration should contain at least one endpoint or suite")
+	ErrNoEndpointOrSuiteInConfig = errors.New("configuration should contain at least one endpoint, external endpoint, or suite")
 
 	// ErrConfigFileNotFound is an error returned when a configuration file could not be found
 	ErrConfigFileNotFound = errors.New("configuration file not found")
@@ -191,7 +191,27 @@ func (config *Config) HasLoadedConfigurationBeenModified() bool {
 
 // UpdateLastFileModTime refreshes Config.lastFileModTime
 func (config *Config) UpdateLastFileModTime() {
-	config.lastFileModTime = time.Now()
+	fileInfo, err := os.Stat(config.configPath)
+	if err != nil {
+		config.lastFileModTime = time.Now()
+		return
+	}
+	var maxModTime time.Time
+	if fileInfo.IsDir() {
+		_ = walkConfigDir(config.configPath, func(path string, d fs.DirEntry, err error) error {
+			if info, err := d.Info(); err == nil && info.ModTime().After(maxModTime) {
+				maxModTime = info.ModTime()
+			}
+			return nil
+		})
+	} else {
+		maxModTime = fileInfo.ModTime()
+	}
+	if maxModTime.IsZero() {
+		config.lastFileModTime = time.Now()
+	} else {
+		config.lastFileModTime = maxModTime
+	}
 }
 
 // LoadConfiguration loads the full configuration composed of the main configuration file
@@ -295,8 +315,8 @@ func parseAndValidateConfigBytes(yamlBytes []byte) (config *Config, err error) {
 	if err = yaml.Unmarshal(yamlBytes, &config); err != nil {
 		return
 	}
-	// Check if the configuration file at least has endpoints configured
-	if config == nil || (len(config.Endpoints) == 0 && len(config.Suites) == 0) {
+	// Check if the configuration file has at least one monitor configured.
+	if config == nil || (len(config.Endpoints) == 0 && len(config.ExternalEndpoints) == 0 && len(config.Suites) == 0) {
 		err = ErrNoEndpointOrSuiteInConfig
 	} else {
 		// XXX: Remove this in v6.0.0
@@ -345,6 +365,10 @@ func parseAndValidateConfigBytes(yamlBytes []byte) (config *Config, err error) {
 		ValidateAndSetConcurrencyDefaults(config)
 		// Cross-config changes
 		config.UI.MaximumNumberOfResults = config.Storage.MaximumNumberOfResults
+		config.UI.BasePath = config.Web.BasePath
+		if config.Security != nil && config.Security.OIDC != nil {
+			config.Security.OIDC.BasePath = config.Web.BasePath
+		}
 	}
 	return
 }
